@@ -135,7 +135,8 @@ body:not(.ads-on) .adslot{display:none!important}
 .lvb{position:relative;aspect-ratio:1;border-radius:14px;background:linear-gradient(180deg,#fff,#ffeccc);box-shadow:0 4px 0 rgba(0,0,0,.2);font-size:20px;color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1}
 .lvb small{font-size:10px;color:#e0a000;letter-spacing:-1px;margin-top:2px}
 .lvb.lock{background:rgba(0,0,0,.25);color:rgba(255,255,255,.7);box-shadow:none}
-.lvb.cur{animation:bdg 1.2s infinite;background:linear-gradient(180deg,#b8ffc8,#6fe08a)}
+.lvb.cur{background:transparent;isolation:isolate;box-shadow:none}
+.lvb.cur::before{content:"";position:absolute;inset:0;z-index:-1;border-radius:inherit;background:linear-gradient(180deg,#b8ffc8,#6fe08a);box-shadow:0 4px 0 rgba(0,0,0,.2);animation:bdg 1.2s infinite;pointer-events:none}
 .lvb.boss{background:linear-gradient(180deg,#ffe9a0,#ffbf2e)}
 .lvb.boss.lock{background:rgba(0,0,0,.25)}
 /* eggs */
@@ -174,7 +175,8 @@ body:not(.ads-on) .adslot{display:none!important}
 .dlist{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;width:100%}
 .dd{border-radius:16px;background:linear-gradient(180deg,#fffdf6,#ffecc8);border:3px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.15);padding:6px 2px;text-align:center;color:var(--ink);font-size:13px;line-height:1.1}
 .dd b{display:block;font-size:24px;margin:3px 0}
-.dd.got{opacity:.5}.dd.now{border-color:#33c065;background:linear-gradient(180deg,#d8ffe0,#9cefb0);animation:bdg 1.2s infinite}
+.dd.got{opacity:.5}.dd.now{border-color:#33c065;background:linear-gradient(180deg,#d8ffe0,#9cefb0);box-shadow:0 0 0 3px rgba(51,192,101,.5);animation:ddp 1.2s infinite}
+@keyframes ddp{50%{box-shadow:0 0 0 7px rgba(51,192,101,.15)}}
 .dd:last-child{grid-column:span 2}
 /* info / reveal / results */
 .info{text-align:center}.info canvas{width:220px;height:200px}.info h3{font-size:28px}.info p{font-size:16px;margin-top:4px}.info .small{font-size:14px;opacity:.75}
@@ -205,6 +207,10 @@ body:not(.ads-on) .adslot{display:none!important}
 }
 .rvinfo{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap}
 @media (orientation:landscape) and (max-height:500px){#scrReveal .wrap{gap:4px}#rvCv{max-height:52vh}#scrReveal .resT{font-size:24px}#bRvOk{min-height:46px}}
+
+/* no long-press image menu / drag ghosts on the playfield */
+img,canvas{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
+#hud .hmid,#hud .hright{pointer-events:none}
 
 </style>
 </head>
@@ -1240,8 +1246,7 @@ function startLevel(L) {
   LV.total = LV.cages.length;
   var s = LV.start; LV.P = { x: s[0], y: s[1], dir: 1, walk: 0, moving: false, dashT: 0, dashCD: 0, st: 'ok', t: 0, vx: 0, vy: -1, hidden: false };
   CAM.x = s[0]; CAM.y = s[1] - 2; MODE = 'level'; JOY.on = false; KEYS = {};
-  onResize(); buildLevelArt(); PARTS.length = 0;
-  show(null); $('#hud').classList.remove('hidden'); $('#scrKeep').classList.add('hidden'); $('#bDash').classList.remove('hidden');
+  show(null); $('#hud').classList.remove('hidden'); LART = null; onResize(); PARTS.length = 0; $('#scrKeep').classList.add('hidden'); $('#bDash').classList.remove('hidden');
   updHud(); zt('level_start', { level: L, level_name: 'L' + L, biome: BIOMES[LV.bi].n }); ztPlay(true);
   var B = BIOMES[LV.bi]; flashMsg((LV.boss ? '👑 BOSS HEIST! ' : '') + B.n + ' ' + (((L - 1) % 6) + 1) + (LV.boss ? '<br><small>Grab 3 keys to open the Golden Vault!</small>' : st.length ? '<br><small>Your stolen critters are here too!</small>' : ''), 2.4);
   if (L === 1 && !SAVE.tut) { zt('tutorial_begin'); setTimeout(function () { if (LV && LV.L === 1) tip('Drag anywhere to move. Tap <b>DASH</b> to zoom!'); }, 2500); }
@@ -1250,9 +1255,12 @@ function startLevel(L) {
 function findFreeNear(x, y) { for (var r = 1; r < 6; r++) for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++) { var cx2 = Math.floor(x) + dx, cy2 = Math.floor(y) + dy; if (cellAt(cx2 + .5, cy2 + .5) === 0 && !LV.home[cy2 * LV.w + cx2] && !LV.cages.some(function (c) { return Math.floor(c.x) === cx2 && Math.floor(c.y) === cy2; }) && !LV.keys.some(function (c) { return Math.floor(c.x) === cx2 && Math.floor(c.y) === cy2; })) return [cx2 + .5, cy2 + .5]; } return [x, y]; }
 var LART = null;
 function onResize() {
-  if (MODE === 'level' && LV) { var nT = clamp(Math.min(W, H) / (W > H ? 7.6 : 8.2), 34, 78); if (Math.abs(nT - T) > .5 || !LART) { T = nT; if (LV) buildLevelArt(); } }
+  if (MODE === 'level' && LV) { var nT = levelTile(); if (Math.abs(nT - T) > .5 || !LART) { T = nT; if (LV) buildLevelArt(); } camUpdate(1); }
   if (MODE !== 'level') keepLayout();
 }
+// tile size: portrait phones fit the whole level width (no half-visible bandits); landscape keeps ~7.6 rows tall with a follow camera
+function levelTile() { var top = camPad(), base = Math.min(W, H) / (W > H ? 7.6 : 8.2); if (W <= H && LV) base = Math.min(base, (W - 8) / LV.w, Math.max(30, (H - top.t - top.b) / LV.h)); return clamp(base, 24, 78); }
+function camPad() { var hb = $('#hud'), hh = hb && !hb.classList.contains('hidden') ? hb.getBoundingClientRect().bottom : 0; return { t: Math.max(hh, 56) + 6, b: W > H ? 6 : 18 }; }
 function hsh(x, y) { var n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return n - Math.floor(n); }
 function buildLevelArt() {
   var B = BIOMES[LV.bi], w = LV.w, h = LV.h, sc = Math.min(2, DPR), D = T * .42;
@@ -1375,7 +1383,14 @@ function lvUpdate(dt) {
   // dash button cooldown ring
   var db = $('#bDash'); db.style.setProperty('--cd', (P.dashCD / 1.3).toFixed(2)); db.classList.toggle('cool', P.dashCD > 0);
 }
-function camUpdate(dt) { var P = LV.P, vw = W / T, vh = H / T, tx = P.x, ty = P.y - .5 + (W > H ? 0 : .6); tx = LV.w <= vw ? LV.w / 2 : clamp(tx, vw / 2 - .3, LV.w - vw / 2 + .3); ty = LV.h <= vh ? LV.h / 2 + (W > H ? 0 : 1.2) : clamp(ty, vh / 2 - 1.2, LV.h - vh / 2 + (W > H ? .6 : 1.8)); CAM.x = lerp(CAM.x, tx, Math.min(1, dt * 6)); CAM.y = lerp(CAM.y, ty, Math.min(1, dt * 6)); }
+function camUpdate(dt) {
+  var P = LV.P, pd = camPad(), vw = W / T, vh = H / T, pt = pd.t / T, pb = pd.b / T, tx, ty;
+  // horizontal: centre if the level fits, else follow with a little look-ahead, clamped to the map edges
+  if (LV.w + .2 <= vw) tx = LV.w / 2; else tx = clamp(P.x + (P.vx || 0) * .6 * (P.moving ? 1 : 0), vw / 2 - .1, LV.w - vw / 2 + .1);
+  // vertical: keep the map inside the band between the HUD and the bottom edge
+  if (LV.h + pt + pb <= vh) ty = LV.h / 2 - (pt - pb) / 2; else ty = clamp(P.y - .3 + (P.vy || 0) * .6 * (P.moving ? 1 : 0), vh / 2 - pt, LV.h - vh / 2 + pb + .3);
+  var k = dt >= 1 ? 1 : Math.min(1, dt * 6); CAM.x = lerp(CAM.x, tx, k); CAM.y = lerp(CAM.y, ty, k);
+}
 function guardsUpdate(dt) {
   var P = LV.P, vis = P.st === "ok" && !P.hidden && !P.safe && !(P.inv > 0) && !GHOST;
   LV.guards.forEach(function (G) {
@@ -1686,6 +1701,9 @@ function endLevel(win) {
 }
 
 /* ---------- input ---------- */
+['contextmenu', 'dragstart', 'selectstart'].forEach(function (t) { document.addEventListener(t, function (e) { if (t !== 'selectstart' || !/INPUT|TEXTAREA/.test(e.target.tagName)) e.preventDefault(); }, { capture: true }); });
+function noDrag() { var els = document.querySelectorAll('img,canvas'); for (var i = 0; i < els.length; i++) els[i].setAttribute('draggable', 'false'); }
+noDrag(); try { new MutationObserver(noDrag).observe(document.body, { childList: true, subtree: true }); } catch (e) {}
 function canvasPoint(e) { return [e.clientX, e.clientY]; }
 cv.addEventListener('pointerdown', function (e) {
   AU.init(); var p = canvasPoint(e);
