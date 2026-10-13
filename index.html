@@ -1045,7 +1045,7 @@ function keepPadPos(i) { var p = KL.pads[i]; return p; }
 function raidAllowed() { return SAVE.unl >= 3 && Object.keys(SAVE.own).length >= 3 && ownCount() >= 4 && SAVE.started; }
 function raidStart() {
   var list = padList(); if (!list.length) return; var ti = Math.floor(Math.random() * list.length), side = Math.random() < .5 ? -1 : 1;
-  KEEP.raid = { u: side < 0 ? -.08 : 1.08, v: .35 + Math.random() * .5, st: 'climb', t: 0, ti: ti, id: list[ti].id, taps: 0, need: 2, dir: -side, walk: 0, carry: null, hop: 0 };
+  var eu = Math.min(.08, (KL.ps * .5) / KL.iw); KEEP.raid = { u: side < 0 ? eu : 1 - eu, v: .35 + Math.random() * .5, st: 'climb', t: 0, ti: ti, id: list[ti].id, taps: 0, need: 2, dir: -side, walk: 0, carry: null, hop: 0 };
   KEEP.raid.climbT = .8 + SAVE.def.fence * .9;
   if (SAVE.def.bell) { AU.sfx('bell'); KEEP.bellRing = 2; banner('🔔 Ding ding! A bandit is sneaking in. Tap it!'); } else { AU.sfx('giggle'); banner('👀 A sneaky bandit! Tap it to shoo!'); }
   if (SAVE.def.pup) { KEEP.pup.st = 'chase'; KEEP.pup.t = 0; AU.sfx('bark'); }
@@ -1070,7 +1070,7 @@ function raidUpdate(dt) {
     pupMove(dt, P.tu, P.tv, .06); return;
   }
   R.t += dt; var sp = .085 * (1 - SAVE.def.bell * .14);
-  if (R.st === 'climb') { R.walk += dt * 6; if (R.t > R.climbT) { R.st = 'sneak'; R.t = 0; } else { if (R.u < 0) R.u = Math.min(-.01, R.u + dt * .03); else R.u = Math.max(1.01, R.u - dt * .03); } }
+  if (R.st === 'climb') { R.walk += dt * 6; if (R.t > R.climbT) { R.st = 'sneak'; R.t = 0; R.hop = 0; } else { R.hop = Math.abs(Math.sin(R.t * 9)) * .12; } }
   else if (R.st === 'sneak') { var p = KL.pads[R.ti], tu = (p.x - KL.ix) / KL.iw, tv = (p.y - KL.iy) / KL.ih + .02, dx = tu - R.u, dy = tv - R.v, d = Math.hypot(dx, dy); R.walk += dt * 8; R.dir = dx < 0 ? -1 : 1; if (d < .02) { R.st = 'grab'; R.t = 0; AU.sfx('giggle'); } else { R.u += dx / d * sp * dt; R.v += dy / d * sp * dt * KL.iw / KL.ih; } }
   else if (R.st === 'grab') { if (R.t > .9) { if (!SAVE.own[R.id]) { R.st = 'shoo'; R.t = 0; } else { R.carry = R.id; R.st = 'flee'; R.t = 0; R.dir = R.u < .5 ? -1 : 1; banner('😮 The bandit grabbed ' + CID[R.id].n + '! Tap fast!'); } } }
   else if (R.st === 'flee') { R.walk += dt * 12; R.u += R.dir * sp * 1.25 * dt; if (R.u < -.15 || R.u > 1.15) { remCrit(R.id); SAVE.stolen.push(R.id); KEEP.raid = null; banner('🦝 ' + CID[R.id].n + ' was taken to the Bandit Base. Go rescue it!'); AU.sfx('lose'); updBadges(); save(); zt('raid_end', { result: 'stolen' }); return; } }
