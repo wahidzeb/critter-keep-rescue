@@ -1,0 +1,42 @@
+{
+  "id": "/critter-keep-rescue/",
+  "name": "Critter Keep Rescue",
+  "short_name": "Critter Keep",
+  "description": "Critter Keep Rescue by Zaib: run a cozy keep of 30 cute critters that earn coins, then sneak past cheeky raccoon bandits in 36 stealth rescue levels to bring borrowed critters home. Hatch eggs, merge for rarer critters, build fences, a bell and a guard puppy. Free kids' game in your browser.",
+  "lang": "en",
+  "start_url": "/critter-keep-rescue/?source=pwa",
+  "scope": "/critter-keep-rescue/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#7fd0f0",
+  "background_color": "#7fd0f0",
+  "categories": [
+    "games"
+  ],
+  "icons": [
+    {
+      "src": "/critter-keep-rescue/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/critter-keep-rescue/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/critter-keep-rescue/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/critter-keep-rescue/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
