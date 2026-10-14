@@ -212,6 +212,16 @@ body:not(.ads-on) .adslot{display:none!important}
 img,canvas{-webkit-touch-callout:none;-webkit-user-select:none;user-select:none;-webkit-user-drag:none}
 #hud .hmid,#hud .hright{pointer-events:none}
 
+/* QA 10-15 */
+.lvb *,#bRescue *{pointer-events:none}
+.lvb{touch-action:manipulation;-webkit-tap-highlight-color:transparent}
+.lvb.cur::after{content:"";position:absolute;inset:-6px;border-radius:18px}
+body.ovopen #scrKeep .ktop,body.ovopen #kBanner{visibility:hidden}
+#tip.mvhint{bottom:calc(env(safe-area-inset-bottom,0px) + 132px);font-size:18px;border:3px solid #ffe36b;animation:pop .4s both,hintbob 1.6s ease-in-out .5s infinite}
+#tip.mvhint small{display:block;font-size:13px;opacity:.8;margin-top:2px}
+@keyframes hintbob{50%{transform:translateY(-5px)}}
+@media (orientation:landscape) and (max-height:500px){#tip.mvhint{bottom:calc(env(safe-area-inset-bottom,0px) + 16px)}}
+
 </style>
 </head>
 <body>
@@ -916,8 +926,9 @@ function toast(h, ms) { var el = $('#toast'); el.innerHTML = h; el.classList.rem
 /* screens */
 var OVER = ['scrMap', 'scrEggs', 'scrMerge', 'scrDefend', 'scrBook', 'scrQuests', 'scrDaily', 'scrSettings', 'scrInfo', 'scrOffline', 'scrReveal', 'scrHow'];
 function show(id) { $$('.screen').forEach(function (s) { if (s.id !== 'scrKeep') s.classList.toggle('hidden', s.id !== id); }); }
-function openOv(id) { $('#' + id).classList.remove('hidden'); AU.sfx('tap'); }
-function closeOv(id) { $('#' + id).classList.add('hidden'); }
+function ovSync() { document.body.classList.toggle('ovopen', anyOv()); }
+function openOv(id) { $('#' + id).classList.remove('hidden'); AU.sfx('tap'); ovSync(); }
+function closeOv(id) { $('#' + id).classList.add('hidden'); ovSync(); }
 function anyOv() { for (var i = 0; i < OVER.length; i++) if (!$('#' + OVER[i]).classList.contains('hidden')) return true; return false; }
 
 /* particles (world or screen) */
@@ -1156,11 +1167,12 @@ function keepTap(x, y) {
 }
 
 /* ---------- offline earnings ---------- */
+var OFF_CAP = 2 * 3600; // credit at most 2h away
 function offlineCheck() {
   var base = OFF_LAST || SAVE.last; OFF_LAST = 0; if (!base || !SAVE.started) return; var el = (Date.now() - base) / 1000; if (el < 60) return;
-  var secs = Math.min(el, 8 * 3600), earn = Math.floor(rate() * secs * .6), lines = [];
+  var secs = Math.min(el, OFF_CAP), earn = Math.floor(rate() * secs * .6), lines = [];
   var h = Math.floor(secs / 3600), m = Math.floor(secs % 3600 / 60);
-  lines.push('You were away for <b>' + (h ? h + 'h ' : '') + m + 'm</b>' + (el > 8 * 3600 ? ' (max 8h)' : '') + '.');
+  lines.push('You were away for <b>' + (h ? h + 'h ' : '') + m + 'm</b>' + (el > OFF_CAP ? ' (critters nap after 2h)' : '') + '.');
   if (earn > 0) { addCoins(earn, 'offline'); lines.push('Your critters made <b class="gold">' + fmt(earn) + ' coins</b>!'); }
   if (el > 1200 && raidAllowed() && Math.random() < .5) {
     var block = Math.min(.9, SAVE.def.fence * .1 + SAVE.def.bell * .12 + SAVE.def.pup * .2);
@@ -1249,7 +1261,8 @@ function startLevel(L) {
   show(null); $('#hud').classList.remove('hidden'); LART = null; onResize(); PARTS.length = 0; $('#scrKeep').classList.add('hidden'); $('#bDash').classList.remove('hidden');
   updHud(); zt('level_start', { level: L, level_name: 'L' + L, biome: BIOMES[LV.bi].n }); ztPlay(true);
   var B = BIOMES[LV.bi]; flashMsg((LV.boss ? '👑 BOSS HEIST! ' : '') + B.n + ' ' + (((L - 1) % 6) + 1) + (LV.boss ? '<br><small>Grab 3 keys to open the Golden Vault!</small>' : st.length ? '<br><small>Your stolen critters are here too!</small>' : ''), 2.4);
-  if (L === 1 && !SAVE.tut) { zt('tutorial_begin'); setTimeout(function () { if (LV && LV.L === 1) tip('Drag anywhere to move. Tap <b>DASH</b> to zoom!'); }, 2500); }
+  if (L === 1 && !SAVE.tut) zt('tutorial_begin');
+  if (L === 1) { LV.hintMove = 1; LV.moved = 0; setTimeout(function () { if (LV && LV.L === 1 && LV.hintMove && MODE === 'level') moveHint(); }, 900); }
   AU.play(SONGS[LV.boss ? 'boss' : 'sneak']);
 }
 function findFreeNear(x, y) { for (var r = 1; r < 6; r++) for (var dy = -r; dy <= r; dy++) for (var dx = -r; dx <= r; dx++) { var cx2 = Math.floor(x) + dx, cy2 = Math.floor(y) + dy; if (cellAt(cx2 + .5, cy2 + .5) === 0 && !LV.home[cy2 * LV.w + cx2] && !LV.cages.some(function (c) { return Math.floor(c.x) === cx2 && Math.floor(c.y) === cy2; }) && !LV.keys.some(function (c) { return Math.floor(c.x) === cx2 && Math.floor(c.y) === cy2; })) return [cx2 + .5, cy2 + .5]; } return [x, y]; }
@@ -1258,8 +1271,8 @@ function onResize() {
   if (MODE === 'level' && LV) { var nT = levelTile(); if (Math.abs(nT - T) > .5 || !LART) { T = nT; if (LV) buildLevelArt(); } camUpdate(1); }
   if (MODE !== 'level') keepLayout();
 }
-// tile size: portrait phones fit the whole level width (no half-visible bandits); landscape keeps ~7.6 rows tall with a follow camera
-function levelTile() { var top = camPad(), base = Math.min(W, H) / (W > H ? 7.6 : 8.2); if (W <= H && LV) base = Math.min(base, (W - 8) / LV.w, Math.max(30, (H - top.t - top.b) / LV.h)); return clamp(base, 24, 78); }
+// tile size: portrait phones fill the screen height (up to 1.5x fit-width); landscape keeps ~7.6 rows tall with a follow camera
+function levelTile() { var top = camPad(), base = Math.min(W, H) / (W > H ? 7.6 : 8.2); if (W <= H && LV) base = Math.max(30, Math.min((H - top.t - top.b) / LV.h, (W - 8) / LV.w * 1.5)); return clamp(base, 24, 78); }
 function camPad() { var hb = $('#hud'), hh = hb && !hb.classList.contains('hidden') ? hb.getBoundingClientRect().bottom : 0; return { t: Math.max(hh, 56) + 6, b: W > H ? 6 : 18 }; }
 function hsh(x, y) { var n = Math.sin(x * 127.1 + y * 311.7) * 43758.5453; return n - Math.floor(n); }
 function buildLevelArt() {
@@ -1358,7 +1371,7 @@ function lvUpdate(dt) {
   if (LVW.dash) { LVW.dash = false; if (P.dashCD <= 0) { P.dashT = .24; P.dashCD = 1.3; if (ml > .1) { P.vx = mx / ml; P.vy = my / ml; } AU.sfx('dash'); for (var i = 0; i < 8; i++) part({ x: P.x, y: P.y - .1, vx: -P.vx * 2 + (Math.random() - .5) * 1.5, vy: -P.vy * 2 + (Math.random() - .5) * 1.5, life: .45, ty: 'puff', col: 'rgba(255,255,255,.7)', sz: 1 }); } }
   var spd = 3.5 * Math.max(.82, 1 - LV.carry.length * .04);
   if (P.dashT > 0) { P.dashT -= dt; moveEnt(P, P.vx * 9 * dt, P.vy * 9 * dt, .28); P.moving = true; P.walk += dt * 22; if (Math.random() < dt * 40) part({ x: P.x, y: P.y - .05, vx: 0, vy: -.2, life: .35, ty: 'puff', col: 'rgba(255,255,255,.55)', sz: .7 }); }
-  else if (ml > .12) { P.vx = mx / ml; P.vy = my / ml; moveEnt(P, mx * spd * dt, my * spd * dt, .28); P.moving = true; P.walk += dt * 12 * ml; } else P.moving = false;
+  else if (ml > .12) { P.vx = mx / ml; P.vy = my / ml; moveEnt(P, mx * spd * dt, my * spd * dt, .28); P.moving = true; P.walk += dt * 12 * ml; if (LV.hintMove && !AUTO && (LV.moved += spd * dt * ml) > 2) moveHintDone(); } else P.moving = false;
   if (Math.abs(P.vx) > .2) P.dir = P.vx < 0 ? -1 : 1;
   var inBush = cellAt(P.x, P.y) === 2; if (inBush && !P.hidden) { AU.sfx('whoosh'); for (var lb = 0; lb < 6; lb++) part({ x: P.x, y: P.y - .4, vx: (Math.random() - .5) * 2, vy: -1 - Math.random(), g: 3, life: .7, ty: 'leaf', col: '#5fbf4a', sz: 1 }); if (LV.L <= 2 && !SAVE.ach.bushtip) { SAVE.ach.bushtip = 1; tip('Hiding in a bush! Bandits can\'t see you here.'); } }
   P.hidden = inBush && P.dashT <= 0;
@@ -1513,7 +1526,14 @@ function drawJoy(g) { if (!JOY.on) return; g.fillStyle = 'rgba(255,255,255,.18)'
 var MSG = '';
 function flashMsg(t, d) { MSG = t; LV.msgT = d || 1.5; LV.msgD = d || 1.5; var el = $('#lvMsg'); el.innerHTML = t; el.classList.remove('hidden'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; clearTimeout(flashMsg.tm); flashMsg.tm = setTimeout(function () { el.classList.add('hidden'); }, (d || 1.5) * 1000); }
 function drawMsg() {}
-function tip(h) { var el = $('#tip'); el.innerHTML = h; el.classList.remove('hidden'); clearTimeout(tip.tm); tip.tm = setTimeout(function () { el.classList.add('hidden'); }, 4200); }
+function moveHint() {
+  var el = $('#tip'); clearTimeout(tip.tm);
+  el.innerHTML = '👆 <b>Drag</b> anywhere to move your critter!<br><small>On a computer: use the <b>arrow keys</b> ⬅️⬆️⬇️➡️ · <b>DASH</b> to zoom</small>';
+  el.classList.remove('hidden'); el.classList.add('mvhint');
+  tip.tm = setTimeout(function () { el.classList.add('hidden'); el.classList.remove('mvhint'); }, 14000);
+}
+function moveHintDone() { if (!LV || !LV.hintMove) return; LV.hintMove = 0; var el = $('#tip'); if (el.classList.contains('mvhint')) { clearTimeout(tip.tm); el.innerHTML = '🎉 Great moving! Find the <b>key</b> 🔑'; el.classList.remove('mvhint'); tip.tm = setTimeout(function () { el.classList.add('hidden'); }, 2600); } }
+function tip(h) { $('#tip').classList.remove('mvhint'); var el = $('#tip'); el.innerHTML = h; el.classList.remove('hidden'); clearTimeout(tip.tm); tip.tm = setTimeout(function () { el.classList.add('hidden'); }, 4200); }
 function updHud() {
   if (!LV) return; $('#lvTag').textContent = (LV.boss ? '👑 ' : '') + 'Level ' + LV.L; $('#lvBiome').textContent = BIOMES[LV.bi].n;
   var h = ''; LV.cages.forEach(function (c) { h += '<i class="' + (c.state === 'home' ? 'on' : c.state === 'carry' ? 'cr' : '') + (c.stolen ? ' st' : '') + '"></i>'; }); $('#hCrit').innerHTML = h;
@@ -1714,12 +1734,21 @@ addEventListener('pointermove', function (e) { if (!JOY.on || e.pointerId !== JO
 function joyEnd(e) { if (e.pointerId === JOY.id) { JOY.on = false; JOY.dx = JOY.dy = 0; JOY.id = null; } }
 addEventListener('pointerup', joyEnd); addEventListener('pointercancel', joyEnd);
 $('#bDash').addEventListener('pointerdown', function (e) { e.preventDefault(); e.stopPropagation(); LVW.dash = true; });
-addEventListener('keydown', function (e) { KEYS[e.code] = true; if (MODE === 'level' && (e.code === 'Space' || e.code === 'ShiftLeft')) { LVW.dash = true; e.preventDefault(); } if (e.code === 'Escape' && MODE === 'level') pause(true); });
+addEventListener('keydown', function (e) { KEYS[e.code] = true; if (MODE === 'level' && /^Arrow/.test(e.code)) e.preventDefault(); if (MODE === 'level' && (e.code === 'Space' || e.code === 'ShiftLeft')) { LVW.dash = true; e.preventDefault(); } if (e.code === 'Escape' && MODE === 'level') pause(true); });
 addEventListener('keyup', function (e) { KEYS[e.code] = false; });
 function pause(on) { if (MODE !== 'level') return; PAUSED = on; JOY.on = false; JOY.dx = JOY.dy = 0; $('#scrPause').classList.toggle('hidden', !on); if (on) { ztPlay(false); AU.stop(); } else { ztPlay(true); AU.play(SONGS[LV.boss ? 'boss' : 'sneak']); } }
 document.addEventListener('visibilitychange', function () { if (document.hidden) { if (SAVE.started) save(); if (MODE === 'level' && LV && LV.state === 'play') pause(true); AU.stop(); } else { if (MODE === 'keep') { offlineCheck(); AU.play(SONGS.keep); } } });
 
+var TAPB = null;
+document.addEventListener('pointerdown', function (e) { var b = e.target.closest && e.target.closest('.lvb,#bRescue'); if (!b && e.target.closest && e.target.closest('.lvrow')) { var bs = e.target.closest('.lvrow').querySelectorAll('.lvb'); for (var i = 0; i < bs.length; i++) { var r = bs[i].getBoundingClientRect(); if (e.clientX >= r.left - 4 && e.clientX <= r.right + 4 && e.clientY >= r.top - 4 && e.clientY <= r.bottom + 4) b = bs[i]; } } TAPB = b ? { b: b, x: e.clientX, y: e.clientY, id: e.pointerId } : null; }, true);
+document.addEventListener('pointerup', function (e) {
+  var t = TAPB; TAPB = null; if (!t || e.pointerId !== t.id || Math.hypot(e.clientX - t.x, e.clientY - t.y) > 24) return;
+  var r = t.b.getBoundingClientRect(), pad = 8; if (e.clientX < r.left - pad || e.clientX > r.right + pad || e.clientY < r.top - pad || e.clientY > r.bottom + pad) return;
+  TAPB_T = performance.now(); t.b.click(); TAPB_T = performance.now();
+}, true);
+var TAPB_T = 0;
 document.addEventListener('click', function (e) {
+  if (e.isTrusted && TAPB_T && performance.now() - TAPB_T < 700 && e.target.closest && e.target.closest('.lvb,#bRescue')) { e.stopImmediatePropagation(); return; }
   var b = e.target.closest('button'); if (!b) { if (e.target.closest('#scrReveal') && RV && !RV.done && RV.t > .3) revealDone(); return; }
   AU.init(); var d = b.dataset;
   if (d.close) { closeOv(d.close); AU.sfx('tap'); if (d.close === 'scrHow' && MODE === 'keep' && !SAVE.ach.welcome) { SAVE.ach.welcome = 1; save(); banner('👆 Tap RESCUE to start your first adventure!'); } return; }
